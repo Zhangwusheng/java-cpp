@@ -5,13 +5,24 @@ import os;
 import uuid
 import sys
 
-OUTPUT_ROOT_DIR = "D:\\testproject\\pygen"
-SOURCE_ROOT_DIR = "D:\\mesos-1.0.1"
+OUTPUT_ROOT_DIR = "D:\\mysql-5.7.15"
+SOURCE_ROOT_DIR = "D:\\mysql-5.7.15"
 
-SOLUTION_NAME = "mesos"
-PROJECT_NAME = "mesos"
+SOLUTION_NAME = "mysql-5.7.15"
+PROJECT_NAME = "mysql-5.7.15"
 
-VC_INCLUDE_DIR = "D:\\mesos-1.0.1\\include\\mesos;D:\\mesos-1.0.1\\3rdparty\\libprocess\\include;D:\\mesos-1.0.1\\3rdparty\\stout\\include"
+VC_INCLUDE_DIR = ["D:\\rocksdb-master\\include", "D:\\rocksdb-master"]
+VC_INCLUDE_DIR = ["D:\\mesos-1.0.1\\include"
+    , "D:\\mesos-1.0.1\\3rdparty\\libprocess\\include",
+                  "D:\\mesos-1.0.1\\3rdparty\\stout\\include",
+                  "D:\\mesos-1.0.1\\3rdparty\\glog-0.3.3\\src\\windows"
+    , "D:\\mesos-1.0.1\\3rdparty\\leveldb-1.4\\include"
+    , "D:\\mesos-1.0.1\\3rdparty\\libev-4.22"
+    , "D:\\mesos-1.0.1\\3rdparty\\protobuf-2.6.1\\src"
+    , "D:\\mesos-1.0.1\\src"
+    , "D:\\mesos-1.0.1\\3rdparty\\boost-1.53.0"]
+
+VC_INCLUDE_DIR = ["D:\\mysql-5.7.15\\include", "D:\\mysql-5.7.15\\libbinlogevents\\include"]
 
 print SOURCE_ROOT_DIR
 print OUTPUT_ROOT_DIR
@@ -134,8 +145,9 @@ PROJECT_FOOTER_TEMPLATE = """
 FILTER_CONTENT_HEADER = """<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 """
-FILTER_CONTENT_FOOTER="""
+FILTER_CONTENT_FOOTER = """
 </Project>"""
+
 
 def output_solution():
     with open(OUTPUT_ROOT_DIR + path.sep + SOLUTION_NAME + ".sln", "w") as solution_file:
@@ -147,6 +159,7 @@ def output_solution():
 
 ALL_FILES = []
 ALL_CPP_SOURCE_FILES = []
+ALL_HEADER_FILES = []
 FILTER_NS_MAP = {}
 
 
@@ -154,7 +167,7 @@ def load_files():
     for root, dirs, files in os.walk(SOURCE_ROOT_DIR):
         # project_file.writelines(project_data);
         for file in files:
-            full_name=root + path.sep + file
+            full_name = root + path.sep + file
             ALL_FILES.append(full_name)
             ext = path.splitext(file)[1]
             dirname = path.dirname(full_name)
@@ -166,10 +179,10 @@ def load_files():
 
             filters = filter_name.split(path.sep)
 
-            total=len(filters)
-            i=0
-            totalName=''
-            while i<total:
+            total = len(filters)
+            i = 0
+            totalName = ''
+            while i < total:
                 tempname = filters[i]
                 # print tempname
                 totalName = totalName + tempname
@@ -180,19 +193,37 @@ def load_files():
                 totalName = totalName + path.sep
                 i += 1
 
-            if ext.lower() == ".cpp" or ext.lower() == ".cxx" or ext.lower() == ".cc"  :
+            if ext.lower() == ".cpp" or ext.lower() == ".cxx" or ext.lower() == ".cc" or ext.lower() == ".c":
                 ALL_CPP_SOURCE_FILES.append(full_name)
+            elif ext.lower() == ".hpp" or ext.lower() == ".hxx" or ext.lower() == ".h":
+                ALL_HEADER_FILES.append(full_name)
 
+
+SOURCE_ENABLE_COMPILE = """    <ClCompile Include="%s">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
+    </ClCompile>
+"""
+HEADER_DISABLE_COMPILE="""    <ClInclude Include="%s">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+"""
 
 def output_project():
-    project_data = PROJECT_HEADER_TEMPLATE % (project_uuid, VC_INCLUDE_DIR)
+    project_data = PROJECT_HEADER_TEMPLATE % (project_uuid, ";".join(VC_INCLUDE_DIR))
     project_file = open(OUTPUT_ROOT_DIR + path.sep + PROJECT_NAME + ".vcxproj", "w");
 
     project_file.writelines(project_data)
     project_file.writelines("  <ItemGroup>\n")
 
     for cppfile in ALL_CPP_SOURCE_FILES:
-        line = "    <ClCompile Include=\"%s\" />\n" % cppfile
+        # line = "    <ClCompile Include=\"%s\" />\n" % cppfile
+        line = SOURCE_ENABLE_COMPILE % cppfile
+        project_file.writelines(line)
+
+    project_file.writelines("  </ItemGroup>")
+    project_file.writelines("  <ItemGroup>\n")
+    for headerdile in ALL_HEADER_FILES:
+        line = HEADER_DISABLE_COMPILE % headerdile
         project_file.writelines(line)
 
     project_file.writelines("  </ItemGroup>")
@@ -210,6 +241,12 @@ FILE_FILTER_ITEM = """
     <ClCompile Include="%s">
       <Filter>%s</Filter>
     </ClCompile>
+"""
+
+HEADER_FILTER_ITEM = """
+    <ClInclude Include="%s">
+      <Filter>%s</Filter>
+    </ClInclude>
 """
 
 
@@ -234,8 +271,21 @@ def output_filters():
         filter_file.writelines(line)
 
     filter_file.writelines("  </ItemGroup>")
+
+    filter_file.writelines("  <ItemGroup>")
+    for fullname in ALL_HEADER_FILES:
+        file_name = str(fullname)
+        filter_name = file_name;
+        filter_name = filter_name.replace(SOURCE_ROOT_DIR + path.sep, "")
+        filter_name = path.dirname(filter_name)
+        line = HEADER_FILTER_ITEM % (file_name, filter_name)
+        filter_file.writelines(line)
+
+    filter_file.writelines("  </ItemGroup>")
+
     filter_file.writelines(FILTER_CONTENT_FOOTER)
     filter_file.close()
+
 
 load_files()
 output_solution()
